@@ -1,0 +1,27 @@
+{
+  "stage": "first native build",
+  "unit_suites": [
+    {
+      "suite": "com.returnables.app.data.EvidenceArchiveTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.returnables.app.domain.DomainTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.returnables.app.data.BackupArchiveTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "apk": "debug build; device verification pending",
+  "instrumentation": "compiled; emulator download pending",
+  "receipt_network_permission": "INTERNET removed from merged manifest",
+  "backup": "Android automatic backup disabled"
+}

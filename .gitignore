@@ -11,3 +11,6 @@ captures/
 .android-user/
 
 .android-avd/
+
+# Local installable builds
+releases/*.apk
