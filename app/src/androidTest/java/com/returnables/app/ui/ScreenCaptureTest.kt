@@ -53,6 +53,7 @@ class ScreenCaptureTest {
     }
 
     private fun capture(name:String) {
+        compose.mainClock.advanceTimeBy(350)
         compose.waitForIdle()
         val bitmap=compose.onRoot().captureToImage().asAndroidBitmap()
         val directory=InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir("qa-screenshots")
@@ -100,7 +101,7 @@ class ScreenCaptureTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Reminders").assertIsDisplayed()
         capture("05-settings")
-        compose.onNodeWithText("Privacy, in plain language").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Purchases and receipt files stay in this app’s local storage. Receipt text is processed on your device. Sharing or exporting creates a copy outside the app; you choose where it goes.").performScrollTo().assertIsDisplayed()
         capture("06-privacy")
     }
 

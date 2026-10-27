@@ -32,9 +32,15 @@ class MainActivityFlowTest {
         if(compose.onAllNodesWithTag("purchase-ledger").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithTag("purchase-ledger").performScrollToNode(hasText(label))
         compose.onNodeWithText(label).performScrollTo()
     }
-    private fun input(label:String,value:String) { scroll(label);compose.onNodeWithText(label).performTextReplacement(value) }
-    private fun tap(label:String) { scroll(label);compose.onNodeWithText(label).performClick() }
-    private fun awaitHome() { compose.waitUntil(timeoutMillis=15_000) { compose.onAllNodesWithText("Search purchases").fetchSemanticsNodes().isNotEmpty() } }
+    private fun input(label:String,value:String) { scroll(label);compose.onNodeWithText(label).performTextReplacement(value);if(label=="Search purchases") compose.onNodeWithText(label).performImeAction() }
+    private fun tap(label:String) { androidx.test.espresso.Espresso.closeSoftKeyboard();scroll(label);compose.onNodeWithText(label).performClick() }
+    private fun awaitHome() { compose.waitUntil(timeoutMillis=15_000) { compose.onAllNodesWithText("Search purchases").fetchSemanticsNodes().isNotEmpty() && compose.onAllNodesWithText("Purchase saved on this device.").fetchSemanticsNodes().isEmpty() } }
+    private fun awaitDetails() {
+        compose.waitUntil(timeoutMillis=10_000) {
+            compose.onAllNodesWithTag("purchase-ledger").fetchSemanticsNodes().isEmpty() &&
+                compose.onAllNodesWithText("Dates you confirmed").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
     private fun owned():List<Purchase> = PurchaseStore(context).use { it.all().filter { p->p.merchant==merchant } }
     private fun awaitRecord(condition:(Purchase)->Boolean):Purchase {
         compose.waitUntil(timeoutMillis=15_000) { owned().singleOrNull()?.let(condition)==true }
@@ -72,6 +78,7 @@ class MainActivityFlowTest {
         awaitHome()
         input("Search purchases",token)
         tap(title)
+        awaitDetails()
         tap("Edit purchase")
         val revised="$title revised"
         input("Item title",revised)
@@ -82,6 +89,7 @@ class MainActivityFlowTest {
         awaitHome()
         input("Search purchases",token)
         tap(revised)
+        awaitDetails()
         tap("Mark returned")
         compose.onNodeWithText("Update this purchase?").assertIsDisplayed()
         assertEquals(PurchaseStatus.ACTIVE,owned().single().status)

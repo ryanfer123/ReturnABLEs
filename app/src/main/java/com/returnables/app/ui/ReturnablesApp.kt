@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -76,12 +80,15 @@ fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions, darkTheme: Bool
     var editorSeed by rememberSaveable(stateSaver = PurchaseSeedSaver) { mutableStateOf<Purchase?>(null) }
     var discardEditor by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    val screenKeyboard=LocalSoftwareKeyboardController.current
+    val screenFocus=LocalFocusManager.current
+    LaunchedEffect(route) { screenKeyboard?.hide();screenFocus.clearFocus() }
     val selected = state.purchases.firstOrNull { it.id == selectedId }
     fun finishDiscard() { actions.clearReceiptDraft(); discardEditor=false; route=if(selected!=null) "detail" else "home" }
     fun leave() { if(route=="edit") discardEditor=true else route="home" }
     BackHandler(enabled = route != "home") { if(!state.busy) leave() }
     LaunchedEffect(state.message) {
-        state.message?.let { snackbar.showSnackbar(it); actions.clearMessage() }
+        state.message?.let { snackbar.showSnackbar(it,withDismissAction=true); actions.clearMessage() }
     }
     ReturnablesTheme(darkTheme=darkTheme) {
         Scaffold(
@@ -131,6 +138,8 @@ fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions, darkTheme: Bool
 
 @Composable
 private fun Home(purchases: List<Purchase>, open: (Purchase) -> Unit) {
+    val keyboard=LocalSoftwareKeyboardController.current
+    val focus=LocalFocusManager.current
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(LedgerFilter.ALL.name) }
     var sort by rememberSaveable { mutableStateOf(LedgerSort.DEADLINE.name) }
@@ -140,8 +149,8 @@ private fun Home(purchases: List<Purchase>, open: (Purchase) -> Unit) {
     val visible=LedgerQuery.select(purchases,today,search,LedgerFilter.valueOf(filter),LedgerSort.valueOf(sort),receiptsOnly)
     val overdue=LedgerQuery.overdueCount(purchases,today)
     val soon=LedgerQuery.dueSoonCount(purchases,today)
-    val filters=listOf(LedgerFilter.UPCOMING to "Upcoming",LedgerFilter.OVERDUE to "Overdue",LedgerFilter.THIS_WEEK to "This week",LedgerFilter.ALL to "All",LedgerFilter.CLOSED to "Closed")
-    LazyColumn(Modifier.fillMaxSize().testTag("purchase-ledger"),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=12.dp,bottom=110.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+    val filters=listOf(LedgerFilter.ALL to "All",LedgerFilter.UPCOMING to "Upcoming",LedgerFilter.THIS_WEEK to "This week",LedgerFilter.OVERDUE to "Overdue",LedgerFilter.CLOSED to "Closed")
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("purchase-ledger"),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=12.dp,bottom=110.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
         item {
             Surface(color=MaterialTheme.colorScheme.primary,shape=RoundedCornerShape(10.dp),border=BorderStroke(2.dp,MaterialTheme.colorScheme.outline)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -158,7 +167,7 @@ private fun Home(purchases: List<Purchase>, open: (Purchase) -> Unit) {
                 }
             }
         }
-        item { OutlinedTextField(search,{search=it},label={Text("Search purchases")},leadingIcon={Icon(Icons.Default.Search,null)},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(8.dp)) }
+        item { OutlinedTextField(search,{search=it},label={Text("Search purchases")},keyboardOptions=KeyboardOptions(imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={keyboard?.hide();focus.clearFocus()}),leadingIcon={Icon(Icons.Default.Search,null)},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(8.dp)) }
         item { Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             filters.forEach { (value,name) -> FilterChip(selected=filter==value.name,onClick={filter=value.name},label={Text(name)},modifier=Modifier.heightIn(min=48.dp),shape=RoundedCornerShape(6.dp)) }
         } }

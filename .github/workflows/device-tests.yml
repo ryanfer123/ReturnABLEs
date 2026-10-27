@@ -31,15 +31,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            device_test_result=0
-            ./gradlew connectedDebugAndroidTest --no-daemon || device_test_result=$?
-            mkdir -p app/build/device-screenshots
-            adb pull /sdcard/Android/data/com.returnables.app/files/qa-screenshots app/build/device-screenshots || true
-            adb shell am start -W -n com.returnables.app/.MainActivity
-            adb shell uiautomator dump /sdcard/returnables-home.xml
-            adb exec-out screencap -p > app/build/device-screenshots/native-home.png
-            exit "$device_test_result"
+          script: ./gradlew connectedDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -47,4 +39,3 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
-            app/build/device-screenshots/

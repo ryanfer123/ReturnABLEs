@@ -20,7 +20,7 @@ competitors' implementation quality or policy accuracy.
 
 ## Implemented scope
 
-The ledger has All, Upcoming, Overdue and Closed views; receipt-only filtering;
+The ledger has All, Upcoming, This week, Overdue and Closed views; receipt-only filtering;
 search across item, merchant, notes and extracted receipt text; and deadline,
 newest and title sorting. Summary counts count each active purchase once. A
 purchase with an expired return date and a future warranty can appear in both
