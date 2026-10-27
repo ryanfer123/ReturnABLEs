@@ -1,6 +1,15 @@
 package com.returnables.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -13,7 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -23,6 +32,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,7 +70,7 @@ private val PurchaseSeedSaver = listSaver<Purchase?, String>(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions) {
+fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions, darkTheme: Boolean = isSystemInDarkTheme()) {
     var route by rememberSaveable { mutableStateOf("home") }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editorSeed by rememberSaveable(stateSaver = PurchaseSeedSaver) { mutableStateOf<Purchase?>(null) }
@@ -68,38 +83,44 @@ fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions) {
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it); actions.clearMessage() }
     }
-    ReturnablesTheme {
+    ReturnablesTheme(darkTheme=darkTheme) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
                 TopAppBar(
                     title = { Text(if (route == "home") "returnABLEs" else when(route) { "edit" -> if(editorSeed?.title.isNullOrEmpty()) "Add purchase" else "Edit purchase"; "settings" -> "Settings"; else -> "Purchase" }, fontWeight = FontWeight.Bold) },
-                    navigationIcon = { if(route != "home") IconButton(onClick = { leave() }, enabled = !state.busy) { Icon(Icons.Default.ArrowBack, "Back") } },
+                    navigationIcon = { if(route != "home") IconButton(onClick = { leave() }, enabled = !state.busy) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                     actions = { if(route == "home") IconButton(onClick = { route = "settings" }) { Icon(Icons.Default.Settings, "Settings") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
                 )
             },
             floatingActionButton = {
                 if(route == "home") ExtendedFloatingActionButton(
+                    modifier = Modifier.testTag("add-purchase").semantics(mergeDescendants = true) { contentDescription = "Add purchase" },
                     onClick = { actions.clearReceiptDraft(); selectedId=null; editorSeed=null; route="edit" },
-                    icon = { Icon(Icons.Default.Add, null) }, text = { Text("Add purchase") },
+                    icon = { Icon(Icons.Default.Add, null) }, text = { Text("Add purchase", modifier = Modifier.clearAndSetSemantics { }) },
                     containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
             }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
-                    when(route) {
+                    AnimatedContent(targetState=route to selectedId,
+                        transitionSpec={ (fadeIn(tween(180)) + slideInVertically(tween(180)){it/32}) togetherWith fadeOut(tween(100)) },
+                        label="Ledger screen") { screen ->
+                    val displayedPurchase=state.purchases.firstOrNull { it.id==screen.second }
+                    when(screen.first) {
                         "home" -> Home(state.purchases) { selectedId=it.id; route="detail" }
                         "settings" -> Settings(state, actions)
                         "edit" -> PurchaseEditor(editorSeed, state, actions, cancel={discardEditor=true}, done={ route="home"; selectedId=null; actions.clearReceiptDraft() })
-                        else -> if(selected != null) PurchaseDetails(selected, state.busy, actions,
-                            edit = { actions.clearReceiptDraft(); editorSeed=selected; route="edit" },
+                        else -> if(displayedPurchase != null) PurchaseDetails(displayedPurchase, state.busy, actions,
+                            edit = { actions.clearReceiptDraft(); editorSeed=displayedPurchase; route="edit" },
                             another = {
                                 actions.clearReceiptDraft()
                                 val now=System.currentTimeMillis()
-                                editorSeed=selected.copy(id=UUID.randomUUID().toString(),title="",amountMinor=null,returnBy=null,warrantyUntil=null,notes="",status=PurchaseStatus.ACTIVE,createdAt=now,updatedAt=now)
+                                editorSeed=displayedPurchase.copy(id=UUID.randomUUID().toString(),title="",amountMinor=null,returnBy=null,warrantyUntil=null,notes="",status=PurchaseStatus.ACTIVE,createdAt=now,updatedAt=now)
                                 selectedId=null; route="edit"
                             }) else Text("This purchase is no longer available.", Modifier.padding(24.dp))
+                    }
                     }
                 }
             }
@@ -111,45 +132,66 @@ fun ReturnablesApp(state: ReturnUiState, actions: ReturnActions) {
 @Composable
 private fun Home(purchases: List<Purchase>, open: (Purchase) -> Unit) {
     var search by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf("Upcoming") }
+    var filter by rememberSaveable { mutableStateOf(LedgerFilter.ALL.name) }
+    var sort by rememberSaveable { mutableStateOf(LedgerSort.DEADLINE.name) }
+    var receiptsOnly by rememberSaveable { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
     val today=LocalDate.now()
-    val visible=purchases.filter { p ->
-        (search.isBlank() || "${p.title} ${p.merchant} ${p.notes}".contains(search,true)) && when(filter) {
-            "Upcoming" -> p.status == PurchaseStatus.ACTIVE && DeadlineRules.forPurchase(p,today).any { it.daysRemaining >= 0 }
-            "Closed" -> p.status != PurchaseStatus.ACTIVE
-            else -> true
-        }
-    }.sortedWith(compareBy<Purchase> { p -> DeadlineRules.forPurchase(p,today).filter { it.daysRemaining >= 0 }.firstOrNull()?.date ?: DeadlineRules.forPurchase(p,today).firstOrNull()?.date ?: LocalDate.MAX }.thenBy { it.title })
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start=20.dp,end=20.dp,top=12.dp,bottom=110.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val visible=LedgerQuery.select(purchases,today,search,LedgerFilter.valueOf(filter),LedgerSort.valueOf(sort),receiptsOnly)
+    val overdue=LedgerQuery.overdueCount(purchases,today)
+    val soon=LedgerQuery.dueSoonCount(purchases,today)
+    val filters=listOf(LedgerFilter.UPCOMING to "Upcoming",LedgerFilter.OVERDUE to "Overdue",LedgerFilter.THIS_WEEK to "This week",LedgerFilter.ALL to "All",LedgerFilter.CLOSED to "Closed")
+    LazyColumn(Modifier.fillMaxSize().testTag("purchase-ledger"),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=12.dp,bottom=110.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
         item {
-            Surface(color=MaterialTheme.colorScheme.primary, shape=RoundedCornerShape(topStart=28.dp,topEnd=28.dp,bottomStart=8.dp,bottomEnd=28.dp)) {
-                Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                    Text("Keep the receipt.\nKnow the date.", style=MaterialTheme.typography.headlineLarge, color=MaterialTheme.colorScheme.onPrimary)
-                    Text("A quiet place for purchases, return windows and warranties.", color=MaterialTheme.colorScheme.onPrimary, style=MaterialTheme.typography.bodyLarge)
+            Surface(color=MaterialTheme.colorScheme.primary,shape=RoundedCornerShape(10.dp),border=BorderStroke(2.dp,MaterialTheme.colorScheme.outline)) {
+                Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Text("Keep the receipt.\nKnow the date.",style=MaterialTheme.typography.headlineLarge,color=MaterialTheme.colorScheme.onPrimary)
+                    Text("Your purchases, ready when it matters.",color=MaterialTheme.colorScheme.onPrimary,style=MaterialTheme.typography.bodyMedium)
                 }
             }
         }
-        item { OutlinedTextField(search,{search=it},label={Text("Search purchases")},leadingIcon={Icon(Icons.Default.Search,null)},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(16.dp)) }
+        if(purchases.isNotEmpty()) item {
+            Surface(color=MaterialTheme.colorScheme.tertiaryContainer,shape=RoundedCornerShape(6.dp),border=BorderStroke(1.5.dp,MaterialTheme.colorScheme.outline)) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick={filter=LedgerFilter.OVERDUE.name},modifier=Modifier.heightIn(min=48.dp)) { Text("$overdue overdue",color=MaterialTheme.colorScheme.onTertiaryContainer) }
+                    TextButton(onClick={filter=LedgerFilter.THIS_WEEK.name},modifier=Modifier.heightIn(min=48.dp)) { Text("$soon due this week",color=MaterialTheme.colorScheme.onTertiaryContainer) }
+                }
+            }
+        }
+        item { OutlinedTextField(search,{search=it},label={Text("Search purchases")},leadingIcon={Icon(Icons.Default.Search,null)},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(8.dp)) }
         item { Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            listOf("Upcoming","All","Closed").forEach { name -> FilterChip(selected=filter==name,onClick={filter=name},label={Text(name)},modifier=Modifier.heightIn(min=48.dp)) }
+            filters.forEach { (value,name) -> FilterChip(selected=filter==value.name,onClick={filter=value.name},label={Text(name)},modifier=Modifier.heightIn(min=48.dp),shape=RoundedCornerShape(6.dp)) }
         } }
-        item { Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text(if(filter=="Upcoming") "Next on your calendar" else "Your purchase ledger",style=MaterialTheme.typography.titleLarge); Text("${visible.size}",style=MaterialTheme.typography.titleLarge) } }
+        item { Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+            FilterChip(selected=receiptsOnly,onClick={receiptsOnly=!receiptsOnly},label={Text("Receipts only")},modifier=Modifier.weight(1f).heightIn(min=48.dp),shape=RoundedCornerShape(6.dp))
+            Box(Modifier.weight(1f)) {
+                TextButton(onClick={sortMenu=true},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("ledger-sort")) { Text("Sort: "+when(LedgerSort.valueOf(sort)){LedgerSort.DEADLINE->"Deadline";LedgerSort.NEWEST->"Newest";LedgerSort.TITLE->"Title"}) }
+                DropdownMenu(expanded=sortMenu,onDismissRequest={sortMenu=false}) {
+                    listOf(LedgerSort.DEADLINE to "Deadline",LedgerSort.NEWEST to "Newest",LedgerSort.TITLE to "Title").forEach { (value,label) -> DropdownMenuItem(text={Text(label)},onClick={sort=value.name;sortMenu=false}) }
+                }
+            }
+        } }
+        item { Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Text(when(LedgerFilter.valueOf(filter)){LedgerFilter.UPCOMING->"Next on your calendar";LedgerFilter.OVERDUE->"Dates to revisit";LedgerFilter.THIS_WEEK->"This week's dates";else->"Your purchase ledger"},style=MaterialTheme.typography.titleLarge)
+            Text("${visible.size} ${if(visible.size==1) "purchase" else "purchases"}"+if(receiptsOnly) " with receipts" else "",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.testTag("ledger-result-count").semantics { liveRegion=LiveRegionMode.Polite })
+            if(filter==LedgerFilter.OVERDUE.name) Text("Active items with a past date. A later warranty may still be upcoming. Check the merchant’s terms.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        } }
         if(visible.isEmpty()) item {
             Column(Modifier.fillMaxWidth().padding(vertical=18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                 Text(if(purchases.isEmpty()) "Your first receipt belongs here." else "No purchases in this view.",style=MaterialTheme.typography.titleLarge)
-                Text(if(purchases.isEmpty()) "Tap Add purchase to record an item. Attach its receipt and confirm the dates that matter." else "Try All or change your search. Items without future deadlines are still in All.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if(purchases.isEmpty()) "Tap Add purchase to record an item. Attach its receipt and confirm the dates that matter." else "Try All, turn off Receipts only, or change your search. Items without future deadlines are still in All.",color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        items(visible,key={it.id}) { PurchaseRow(it,today) { open(it) } }
+        items(visible,key={it.id}) { p -> PurchaseRow(p,today,filter==LedgerFilter.OVERDUE.name) { open(p) } }
         item { Text("Dates are reminders you confirm, not a merchant’s return policy. Check the original terms before acting.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
 @Composable
-private fun PurchaseRow(p: Purchase,today: LocalDate,onClick:()->Unit) {
+private fun PurchaseRow(p: Purchase,today: LocalDate,preferOverdue:Boolean=false,onClick:()->Unit) {
     val deadlines=DeadlineRules.forPurchase(p,today)
-    val next=deadlines.firstOrNull { it.daysRemaining >= 0 } ?: deadlines.firstOrNull()
-    Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.surface,modifier=Modifier.fillMaxWidth().clickable(onClick=onClick)) {
+    val next=if(preferOverdue) deadlines.firstOrNull { it.daysRemaining < 0 } ?: deadlines.firstOrNull() else deadlines.firstOrNull { it.daysRemaining >= 0 } ?: deadlines.firstOrNull()
+    Surface(shape=RoundedCornerShape(8.dp),color=MaterialTheme.colorScheme.surface,border=BorderStroke(1.5.dp,MaterialTheme.colorScheme.outline),modifier=Modifier.fillMaxWidth().testTag("purchase-row-${p.id}").clickable(onClick=onClick)) {
         Row(Modifier.padding(18.dp),horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                 Text(p.title,style=MaterialTheme.typography.titleMedium)
@@ -171,11 +213,14 @@ private fun PurchaseDetails(p: Purchase,busy:Boolean,actions:ReturnActions,edit:
         Text(p.title,style=MaterialTheme.typography.headlineLarge)
         Text("Purchased ${p.purchasedOn.format(readableDate)}",style=MaterialTheme.typography.bodyLarge)
         p.amountMinor?.let { Text("${p.currency} ${Money.format(it,p.currency)}",style=MaterialTheme.typography.titleLarge) }
-        Surface(color=MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(20.dp)) { Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Surface(color=MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(10.dp),border=BorderStroke(1.5.dp,MaterialTheme.colorScheme.outline)) { Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Dates you confirmed",style=MaterialTheme.typography.titleMedium)
             Info("Return by",p.returnBy?.format(readableDate) ?: "Not recorded")
             Info("Warranty until",p.warrantyUntil?.format(readableDate) ?: "Not recorded")
             Text("${p.status.name.lowercase().replaceFirstChar{it.uppercase()}} · Verify merchant terms before a return or claim.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(p.status==PurchaseStatus.ACTIVE && p.returnBy!=null) OutlinedButton(onClick={actions.addToCalendar(p,DeadlineKind.RETURN)},enabled=!busy,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("Add return date to calendar") }
+            if(p.status==PurchaseStatus.ACTIVE && p.warrantyUntil!=null) OutlinedButton(onClick={actions.addToCalendar(p,DeadlineKind.WARRANTY)},enabled=!busy,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("Add warranty date to calendar") }
+            if(p.status==PurchaseStatus.ACTIVE && (p.returnBy!=null || p.warrantyUntil!=null)) Text("Opens a calendar draft. Review the date and save it in your calendar app.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         } }
         if(p.receiptName!=null) {
             Text("Original receipt",style=MaterialTheme.typography.titleLarge)
@@ -223,7 +268,7 @@ private fun PurchaseEditor(seed:Purchase?,state:ReturnUiState,actions:ReturnActi
         Text(draft?.fileName ?: seed?.receiptName ?: "A receipt is optional. You can attach it later.",style=MaterialTheme.typography.bodyMedium)
         if(state.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Working on your receipt…",style=MaterialTheme.typography.bodyMedium) }
         if(draft!=null) {
-            Surface(color=MaterialTheme.colorScheme.secondaryContainer,shape=RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Surface(color=MaterialTheme.colorScheme.secondaryContainer,shape=RoundedCornerShape(10.dp),modifier=Modifier.animateContentSize()) { Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                 Text("Review receipt suggestions",style=MaterialTheme.typography.titleMedium)
                 Text("Nothing below changes a date or amount until you choose it. Check the receipt; extraction can be wrong.",style=MaterialTheme.typography.bodyMedium)
                 draft.suggestions.merchantGuess?.let { guess -> OutlinedButton(onClick={merchant=guess},enabled=!state.busy,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("Use merchant: $guess") } }
@@ -254,7 +299,7 @@ private fun PurchaseEditor(seed:Purchase?,state:ReturnUiState,actions:ReturnActi
         DateField("Return by (optional)",returnDate,{returnDate=it},!state.busy)
         DateField("Warranty until (optional)",warranty,{warranty=it},!state.busy)
         OutlinedTextField(notes,{notes=it},label={Text("Notes (optional)")},enabled=!state.busy,minLines=3,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp))
-        if(errors.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.errorContainer,shape=RoundedCornerShape(12.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) { Text("Check these details",fontWeight=FontWeight.Bold); errors.forEach { Text(it,color=MaterialTheme.colorScheme.error) } } }
+        if(errors.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.errorContainer,shape=RoundedCornerShape(8.dp),modifier=Modifier.animateContentSize().semantics(mergeDescendants=true) { liveRegion=LiveRegionMode.Polite }) { Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) { Text("Check these details",fontWeight=FontWeight.Bold); errors.forEach { Text(it,color=MaterialTheme.colorScheme.error) } } }
         Button(onClick={
             val problems=mutableListOf<String>()
             fun date(value:String,label:String,optional:Boolean=false):LocalDate? {

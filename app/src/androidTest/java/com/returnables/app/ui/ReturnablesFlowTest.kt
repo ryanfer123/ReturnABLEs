@@ -3,7 +3,10 @@ package com.returnables.app.ui
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
+import android.view.WindowManager
+import org.junit.Before
 import com.returnables.app.domain.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -11,19 +14,29 @@ import org.junit.Test
 import java.time.LocalDate
 
 class ReturnablesFlowTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @Before fun keepTestActivityAwake() {
+        compose.activity.runOnUiThread {
+            compose.activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     private val today = LocalDate.now()
     private fun purchase(id:String="item",title:String="Headphones",status:PurchaseStatus=PurchaseStatus.ACTIVE) = Purchase(
         id=id,title=title,merchant="Example shop",purchasedOn=today.minusDays(3),
         returnBy=today.plusDays(4),status=status,receiptName="original.jpg",receiptMime="image/jpeg")
-    private fun tap(label:String) = compose.onNodeWithText(label).performScrollTo().performClick()
-    private fun input(label:String,text:String) = compose.onNodeWithText(label).performScrollTo().performTextReplacement(text)
+    private fun scroll(label:String) {
+        if(compose.onAllNodesWithTag("purchase-ledger").fetchSemanticsNodes().isNotEmpty()) { compose.onNodeWithTag("purchase-ledger").performScrollToNode(hasText(label));compose.onNodeWithText(label).performScrollTo() }
+        else compose.onNodeWithText(label).performScrollTo()
+    }
+    private fun tap(label:String) { scroll(label);compose.onNodeWithText(label).performClick() }
+    private fun input(label:String,text:String) { scroll(label);compose.onNodeWithText(label).performTextReplacement(text) }
 
     @Test fun emptyLedgerAndBlankPurchaseAreActionable() {
         val actions=FakeActions()
         compose.setContent { ReturnablesApp(ReturnUiState(),actions) }
         compose.onNodeWithText("Your first receipt belongs here.").assertExists()
-        compose.onNodeWithText("Add purchase").performClick()
+        compose.onNodeWithTag("add-purchase").performClick()
         tap("Save purchase")
         compose.onNodeWithText("Title must contain 1–160 characters.").performScrollTo().assertIsDisplayed()
         assertTrue(actions.saved.isEmpty())
@@ -35,7 +48,7 @@ class ReturnablesFlowTest {
         val extracted=today.minusYears(2)
         actions.attach={state.value=state.value.copy(receiptDraft=ReceiptDraft("scan.jpg","image/jpeg","Example shop\n$extracted",ReceiptSuggestions("Example shop",listOf(DateCandidate(extracted,"Date $extracted",false)),emptyList())))}
         compose.setContent { ReturnablesApp(state.value,actions) }
-        compose.onNodeWithText("Add purchase").performClick()
+        compose.onNodeWithTag("add-purchase").performClick()
         tap("Import receipt image or PDF")
         compose.onNodeWithText("Purchase date").performScrollTo().assertTextContains(today.toString())
         tap("Use purchase date $extracted")
@@ -64,13 +77,13 @@ class ReturnablesFlowTest {
         val actions=FakeActions()
         compose.setContent { ReturnablesApp(ReturnUiState(purchases=listOf(purchase(),purchase("closed","Travel bag",PurchaseStatus.RETURNED))),actions) }
         tap("Closed")
-        compose.onNodeWithText("Travel bag").performScrollTo().assertIsDisplayed()
+        scroll("Travel bag");compose.onNodeWithText("Travel bag").assertIsDisplayed()
         compose.onNodeWithText("Headphones").assertDoesNotExist()
         input("Search purchases","missing")
-        compose.onNodeWithText("No purchases in this view.").performScrollTo().assertIsDisplayed()
+        scroll("No purchases in this view.");compose.onNodeWithText("No purchases in this view.").assertIsDisplayed()
         input("Search purchases","")
         tap("All")
-        compose.onNodeWithText("Headphones").performScrollTo().assertIsDisplayed()
+        scroll("Headphones");compose.onNodeWithText("Headphones").assertIsDisplayed()
     }
 
     @Test fun restoringEditedPurchaseRetainsIdentityReceiptAndUnsavedFields() {
@@ -114,12 +127,27 @@ class ReturnablesFlowTest {
 
     @Test fun headerBackOffersToKeepUnsavedEditing() {
         compose.setContent { ReturnablesApp(ReturnUiState(),FakeActions()) }
-        compose.onNodeWithText("Add purchase").performClick()
+        compose.onNodeWithTag("add-purchase").performClick()
         input("Item title","Unsaved item")
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Discard these edits?").assertIsDisplayed()
         compose.onNodeWithText("Keep editing").performClick()
         compose.onNodeWithText("Item title").assertTextContains("Unsaved item")
+    }
+
+    @Test fun overdueReceiptsAndSortControlsRefineTheLedger() {
+        val overdue=purchase("overdue","Past return").copy(returnBy=today.minusDays(1),warrantyUntil=today.plusMonths(4))
+        val noReceipt=purchase("without","No receipt").copy(receiptName=null,receiptMime=null)
+        compose.setContent { ReturnablesApp(ReturnUiState(purchases=listOf(overdue,noReceipt)),FakeActions()) }
+        tap("Overdue")
+        scroll("Past return");compose.onNodeWithText("Expired").assertExists()
+        tap("All");tap("Receipts only")
+        scroll("1 purchase with receipts");compose.onNodeWithText("1 purchase with receipts").assertExists()
+        scroll("Sort: Deadline");compose.onNodeWithTag("ledger-sort").performClick()
+        compose.onNodeWithText("Title").performClick()
+        scroll("Sort: Title");compose.onNodeWithText("Sort: Title").assertExists()
+        tap("This week")
+        scroll("No purchases in this view.");compose.onNodeWithText("No purchases in this view.").assertExists()
     }
 
     private class FakeActions:ReturnActions {

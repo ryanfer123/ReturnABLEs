@@ -34,7 +34,9 @@ class DeadlineWorker(context: Context, params: WorkerParameters) : Worker(contex
                     val notification=NotificationCompat.Builder(applicationContext,CHANNEL)
                         .setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle("${deadline.kind.name.lowercase().replaceFirstChar { it.uppercase() }} deadline $timing")
                         .setContentText("${purchase.title} · ${purchase.merchant}").setContentIntent(pending).setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).build()
-                    NotificationManagerCompat.from(applicationContext).notify(key.hashCode(),notification)
+                    if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return Result.success()
+                    try { NotificationManagerCompat.from(applicationContext).notify(key.hashCode(),notification) }
+                    catch (_: SecurityException) { return Result.success() }
                     store.markReminderSent(key)
                 }
             }

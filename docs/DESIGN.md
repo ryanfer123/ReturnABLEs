@@ -39,3 +39,22 @@ Compose regression source covers explicit OCR date selection, invalid input,
 status confirmation, search/filters, restoration of an edited identity and reused
 receipt, and keeping edits after Back. Build/emulator results are recorded by the
 coordinating agent; test source alone is not a rendered validation claim.
+
+## Material ledger refresh
+
+The new direction combines Material 3 behavior with bold, receipt-like framing:
+warm paper #FAF8F0, ink #172034, cobalt #2447DA, lime #D8FF70 and white #FFFFFF.
+Dark mode uses navy paper #131923 and light ink #EBEEF7, preserving the same
+hierarchy. Solid outlines and small corner radii organize the ledger; a cobalt
+intro and a lime urgency strip carry emphasis. No decorative fake receipt art.
+
+Useful controls lead the composition: real item counts for overdue and due-soon,
+Overdue/Upcoming/All/Closed filters, receipts-only selection, and date/title/newest
+sorting. No amount ranking compares different currencies. Detail screens offer
+calendar drafts for recorded dates, with external user review. Errors announce
+through a polite live region. Auto-mirrored back navigation supports RTL.
+
+Route changes use a short native crossfade and small vertical entrance. Native
+Compose animation duration scaling respects the Android system motion setting.
+Content-size animation is limited to supporting panels; no scrolling engine,
+continuous effect, external asset or 3D runtime is added.

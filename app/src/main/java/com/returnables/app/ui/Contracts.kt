@@ -1,5 +1,6 @@
 package com.returnables.app.ui
 
+import com.returnables.app.domain.DeadlineKind
 import com.returnables.app.domain.Purchase
 import com.returnables.app.domain.ReceiptSuggestions
 
@@ -18,6 +19,7 @@ interface ReturnActions {
     fun clearReceiptDraft()
     fun openReceipt(purchase: Purchase)
     fun shareEvidence(purchase: Purchase)
+    fun addToCalendar(purchase: Purchase, kind: DeadlineKind) {}
     fun exportBackup()
     fun restoreBackup()
     fun requestNotifications()

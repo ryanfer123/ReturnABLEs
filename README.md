@@ -10,15 +10,21 @@ warranty dates, and assembling evidence when something needs to go back.
 - Extract Latin-script text from images on device and review proposed merchant,
   dates and totals. Ambiguous numeric dates remain alternatives; no return policy
   is inferred. PDFs can be attached and viewed; their details are entered manually.
-- Search purchases, inspect deadlines, edit details, and mark purchases returned,
+- Search item names, merchants, notes and extracted receipt text. Filter by upcoming,
+  overdue, closed or attached-receipt status; sort by deadline, newest or title.
+- Inspect deadlines, edit details, and mark purchases returned,
   claimed or archived. Closed purchases stop producing deadline reminders.
-- Request local notifications for active deadlines in the next three days.
+- See a due-this-week summary and request local notifications for active deadlines
+  in the next three days.
+- Open a return or warranty deadline in your calendar as a draft you review and save.
 - Share a readable evidence ZIP with structured details and the original receipt.
 - Export or restore a versioned backup of purchases and receipt files.
 
 The app uses Kotlin, Jetpack Compose, SQLite, bundled ML Kit text recognition and
 WorkManager. It requires Android 8.0 (API 26) or newer. No account or backend is
-required.
+required. Material 3 controls, paper-and-ink cards, system dark mode and short
+native screen transitions support a focused purchase workflow. This is a debug
+preview; the complete device workflow rerun is in progress.
 
 ## Build and install
 
@@ -50,7 +56,9 @@ Recording a returned or claimed status does not contact the merchant or file a c
 
 Purchase records and attached receipts stay in app-private local storage. OCR runs
 on device. Sharing and document export create copies in the destination you choose.
-The app does not send receipts to an OCR service or include analytics.
+The app does not send receipts to an OCR service or add an analytics integration.
+The merged application manifest removes Internet permission. ML Kit has its own
+SDK/model terms and metrics disclosures; see [third-party components](THIRD_PARTY.md).
 
 Backup and evidence ZIPs are **not encrypted** and can contain addresses, payment
 references, notes and full receipt text. Protect those files. Uninstalling the app
@@ -63,14 +71,22 @@ See [backup and evidence formats](docs/BACKUP_FORMAT.md).
 
 ## Verification
 
-Pure JVM tests cover money precision, leap days, inclusive/expired deadlines,
-closed purchases, ambiguous receipt dates, JSON roundtrips and bounded archive
-validation. Build results and device/emulator observations should be recorded
-separately; a passing unit test does not establish notification delivery or OCR
-quality on a particular receipt.
+All **34 JVM tests pass**, including exact money, inclusive deadlines, archive
+validation, combined ledger filters, receipt-text search, sorting, and calendar
+UTC boundaries. Both debug APKs build and lint reports zero errors.
 
-See [implementation plan](PLAN.md) and [design notes](docs/DESIGN.md).
+The 20 Android tests cover bundled OCR, SQLite persistence, private receipt copies,
+real save/edit/status workflows, UI validation/restoration, filters, and rendered
+light/dark/large-text screenshots. Their full rerun is pending: the latest phone
+run passed seven checks but could not complete eleven screen interactions while
+the phone slept. Tests now keep only their own activity window awake.
+Notification delivery and receipt-extraction accuracy across real-world layouts
+remain separate from these smoke checks. See the [latest validation record](docs/validation-latest.json)
+and [first build record](docs/validation-first-build.json).
+
+See [implementation plan](PLAN.md), [design notes](docs/DESIGN.md), and
+[feature research and behavior](docs/FEATURE_RESEARCH.md).
 
 ## License
 
-[MIT](LICENSE), copyright 2026 Ryan Fernandes. Dependencies retain their own licenses.
+[MIT](LICENSE), copyright 2026 Ryan Fernandes. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY.md).

@@ -8,6 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.provider.CalendarContract
+import com.returnables.app.domain.CalendarDraft
+import com.returnables.app.domain.DeadlineKind
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,6 +64,18 @@ class MainActivity : ComponentActivity() {
                 clipData=ClipData.newRawUri("Purchase evidence",uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             },"Share purchase evidence")) } catch (_:ActivityNotFoundException) { model.message("No sharing app is installed.") }
         } }
+        override fun addToCalendar(purchase:Purchase,kind:DeadlineKind) {
+            val draft=CalendarDraft.from(purchase,kind) ?: run { model.message("This deadline cannot be exported to your calendar. Check the date and purchase status.");return }
+            try {
+                startActivity(Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI).apply {
+                    putExtra(CalendarContract.Events.TITLE,draft.title)
+                    putExtra(CalendarContract.Events.DESCRIPTION,draft.description)
+                    putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY,true)
+                    putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME,draft.beginMillis)
+                    putExtra(CalendarContract.EXTRA_EVENT_END_TIME,draft.endMillis)
+                })
+            } catch (_:ActivityNotFoundException) { model.message("No calendar app is installed. Your confirmed date is still saved in returnABLEs.") }
+        }
         override fun exportBackup() { backupDestination.launch("returnABLEs-backup-${java.time.LocalDate.now()}.zip") }
         override fun restoreBackup() { restoreSource.launch(arrayOf("application/zip","application/octet-stream","application/x-zip-compressed")) }
         override fun requestNotifications() {

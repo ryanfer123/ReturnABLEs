@@ -1,0 +1,11 @@
+{
+  "verified_at_utc": "2026-10-27T11:31:17.540393+00:00",
+  "build": "assembleDebug and assembleDebugAndroidTest passed",
+  "unit_tests": 34,
+  "unit_failures": 0,
+  "lint": "0 errors; warnings retained in build report",
+  "apk_sha256": "a4397c32268a4227ebb61be077e5015668b6cd41476540ee34c2cb690c2d6bb3",
+  "device_tests": "20 tests compiled; rerun pending unlocked phone / CI emulator",
+  "previous_phone_run": "7 of 18 passed; 11 screen tests could not find visible Compose hierarchy while phone slept. Not a full device pass.",
+  "privacy": "INTERNET removed; automatic backup and device transfer excluded; explicit ZIP exports remain unencrypted"
+}
